@@ -29,22 +29,20 @@ jobs:
           mvn install:install-file -Dfile=./libs/TripPricer.jar -DgroupId=tripPricer -DartifactId=tripPricer -Dversion=1.0.0 -Dpackaging=jar
 
       - name: Build and test with Maven (with JaCoCo and Surefire)
-        run: mvn clean verify jacoco:report surefire-report:report-only
+        run: mvn clean verify jacoco:report surefire-report:report-only javadoc:javadoc
 
       - name: Upload JaCoCo report
         uses: actions/upload-artifact@v4
         with:
           name: jacoco-report
-          path: target/site/jacoco/
+          path: |
+            target/site/jacoco/
+            target/site/apidocs/
+            target/report/
+            target/*.jar
 
-      - name: Upload Surefire report
-        uses: actions/upload-artifact@v4
+      - name: Publish to GitHub Pages
+        uses: peaceiris/actions-gh-pages@v3
         with:
-          name: surefire-report
-          path: target/site/surefire-report.html
-
-      - name: Upload built JAR
-        uses: actions/upload-artifact@v4
-        with:
-          name: application-jar
-          path: target/*.jar
+          personal_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: ./target
