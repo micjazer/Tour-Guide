@@ -3,7 +3,7 @@ name: Dockerize Java Application
 on:
   push:
     branches:
-      - docker # Change 'docker' to your branch name where you want to trigger this action (e.g., 'main')
+      - docker
   pull_request:
     branches:
       - main
@@ -46,7 +46,3 @@ jobs:
         run: |
           docker push ${{ secrets.DOCKER_USERNAME }}/p8:latest
           docker push ${{ secrets.DOCKER_USERNAME }}/p8:${{ env.short_sha }}
-
-      - name: Run Docker container
-        run: |
-          docker run -d -p 8080:8080 ${{ secrets.DOCKER_USERNAME }}/p8:latest
