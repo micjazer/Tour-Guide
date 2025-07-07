@@ -1,0 +1,44 @@
+name: Generate artefacts
+
+on:
+  push:
+    branches:
+      - artefacts
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  test-and-report:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v2
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v3
+        with:
+          java-version: "17"
+          distribution: "temurin"
+
+      - name: Build and test with Maven (with JaCoCo and Surefire)
+        run: mvn clean verify jacoco:report surefire-report:report-only
+
+      - name: Upload JaCoCo report
+        uses: actions/upload-artifact@v3
+        with:
+          name: jacoco-report
+          path: target/site/jacoco/
+
+      - name: Upload Surefire report
+        uses: actions/upload-artifact@v3
+        with:
+          name: surefire-report
+          path: target/site/surefire-report.html
+
+      - name: Upload built JAR
+        uses: actions/upload-artifact@v3
+        with:
+          name: application-jar
+          path: target/*.jar
