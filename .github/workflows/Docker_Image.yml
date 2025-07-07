@@ -31,15 +31,22 @@ jobs:
       - name: Build the application with Maven
         run: mvn clean install
 
-      - name: Build Docker image
-        run: docker build -t ${{ secrets.DOCKER_USERNAME }}/p8:latest .
+      - name: Extract short commit SHA
+        id: vars
+        run: echo "short_sha=$(echo $GITHUB_SHA | cut -c1-7)" >> $GITHUB_ENV
+
+      - name: Build Docker image with tags
+        run: |
+          docker build -t ${{ secrets.DOCKER_USERNAME }}/p8:latest -t ${{ secrets.DOCKER_USERNAME }}/p8:${{ env.short_sha }} .
 
       - name: Log in to Docker Hub
         run: echo ${{ secrets.DOCKER_PASSWORD }} | docker login --username ${{ secrets.DOCKER_USERNAME }} --password-stdin
 
       - name: Push Docker image to Docker Hub
-        run: docker push ${{ secrets.DOCKER_USERNAME }}/p8:latest
+        run: |
+          docker push ${{ secrets.DOCKER_USERNAME }}/p8:latest
+          docker push ${{ secrets.DOCKER_USERNAME }}/p8:${{ env.short_sha }}
 
-      - name: Run Docker container (optional)
+      - name: Run Docker container
         run: |
           docker run -d -p 8080:8080 ${{ secrets.DOCKER_USERNAME }}/p8:latest
