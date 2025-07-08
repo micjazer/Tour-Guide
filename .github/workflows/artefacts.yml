@@ -31,15 +31,29 @@ jobs:
       - name: Build and test with Maven (with JaCoCo and Surefire)
         run: mvn clean verify jacoco:report surefire-report:report-only javadoc:javadoc
 
-      - name: Upload JaCoCo, Javadoc, Surefire report and JAR
+      - name: Upload JaCoCo Report
         uses: actions/upload-artifact@v4
         with:
           name: jacoco-report
-          path: |
-            target/site/jacoco/
-            target/site/apidocs/
-            target/report/
-            target/*.jar
+          path: target/site/jacoco/
+
+      - name: Upload Javadoc
+        uses: actions/upload-artifact@v4
+        with:
+          name: javadoc
+          path: target/site/apidocs/
+
+      - name: Upload Surefire Report
+        uses: actions/upload-artifact@v4
+        with:
+          name: surefire-report
+          path: target/report/
+
+      - name: Upload JAR
+        uses: actions/upload-artifact@v4
+        with:
+          name: application-jar
+          path: target/*.jar
 
       - name: Publish to GitHub Pages
         uses: peaceiris/actions-gh-pages@v3
