@@ -46,3 +46,4 @@ jobs:
         with:
           personal_token: ${{ secrets.GITHUB_TOKEN }}
           publish_dir: ./target
+          skip_clean: true
