@@ -97,23 +97,27 @@ public class TourGuideService {
 	}
 
 	public List<NearbyAttractionDTO> getNearByAttractions(VisitedLocation visitedLocation) {
-		List<NearbyAttractionDTO> nearbyAttractions = new ArrayList<>();
-		List<Attraction> attractions = gpsUtil.getAttractions();
+		List<Attraction> Allattractions = gpsUtil.getAttractions();
 
-		for (Attraction attraction : attractions) {
-			double distance = rewardsService.getDistance(attraction, visitedLocation.location);
-			int rewardPoints = rewardsService.getRewardPoints(attraction, visitedLocation.userId);
+		List<Attraction> closestAttractions = Allattractions.stream()
+				.sorted(Comparator.comparingDouble(
+						attraction -> rewardsService.getDistance(attraction, visitedLocation.location)))
+				.limit(5)
+				.collect(Collectors.toList());
 
-			nearbyAttractions.add(new NearbyAttractionDTO(
-					attraction.attractionName,
-					visitedLocation.location,
-					attraction.longitude,
-					attraction.latitude,
-					distance,
-					rewardPoints));
-		}
+		return closestAttractions.stream()
+				.map(attraction -> {
+					double distance = rewardsService.getDistance(attraction, visitedLocation.location);
+					int rewardPoints = rewardsService.getRewardPoints(attraction, visitedLocation.userId);
 
-		return nearbyAttractions.stream()
+					return new NearbyAttractionDTO(
+							attraction.attractionName,
+							visitedLocation.location,
+							attraction.longitude,
+							attraction.latitude,
+							distance,
+							rewardPoints);
+				})
 				.sorted(Comparator.comparingDouble(NearbyAttractionDTO::getDistance))
 				.limit(5)
 				.collect(Collectors.toList());
