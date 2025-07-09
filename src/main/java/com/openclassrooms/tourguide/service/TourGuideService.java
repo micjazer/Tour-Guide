@@ -11,6 +11,12 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Random;
 import java.util.UUID;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ThreadLocalRandom;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
@@ -92,8 +98,40 @@ public class TourGuideService {
 	public VisitedLocation trackUserLocation(User user) {
 		VisitedLocation visitedLocation = gpsUtil.getUserLocation(user.getUserId());
 		user.addToVisitedLocations(visitedLocation);
-		rewardsService.calculateRewards(user);
+		rewardsService.calculateRewards(user, gpsUtil.getAttractions());
 		return visitedLocation;
+	}
+
+	public List<VisitedLocation> trackUserLocation(List<User> users) {
+		ExecutorService executorService = Executors.newCachedThreadPool();
+		AtomicInteger processedCount = new AtomicInteger(0);
+		List<VisitedLocation> visitedLocations = new ArrayList<>();
+		long startTime = System.currentTimeMillis();
+		// CALCULATE REWARD DE BASE
+		// rewardsService.calculateRewards(users, gpsUtil.getAttractions());
+		List<CompletableFuture<Void>> futures = new ArrayList<>();
+
+		for (User user : users) {
+			CompletableFuture<Void> future = CompletableFuture.runAsync(() -> {
+				VisitedLocation visitedLocation = gpsUtil.getUserLocation(user.getUserId());
+				user.addToVisitedLocations(visitedLocation);
+				synchronized (visitedLocations) {
+					visitedLocations.add(visitedLocation);
+				}
+				int count = processedCount.incrementAndGet();
+				if (count % 1000 == 0) {
+					long elapsedTime = System.currentTimeMillis() - startTime;
+					System.out.println(count + " utilisateur fait. temps pris: " + (elapsedTime /
+							1000) + " secondes.");
+				}
+			}, executorService);
+			futures.add(future);
+		}
+
+		CompletableFuture.allOf(futures.toArray(new CompletableFuture[0])).join();
+		executorService.shutdown();
+
+		return visitedLocations;
 	}
 
 	public List<NearbyAttractionDTO> getNearByAttractions(VisitedLocation visitedLocation) {
