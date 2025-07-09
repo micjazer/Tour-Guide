@@ -71,8 +71,8 @@ public class RewardsService {
 
 				if (count % 1000 == 0) {
 					long elapsedTime = System.currentTimeMillis() - startTime;
-					// System.out.println(count + " users OK. temps pris: " + (elapsedTime / 1000) +
-					// " secondes.");
+					System.out.println(count + " users OK. temps pris: " + (elapsedTime / 1000) +
+							" secondes.");
 				}
 			});
 		}
