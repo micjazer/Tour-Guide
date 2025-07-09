@@ -2,6 +2,10 @@ package com.openclassrooms.tourguide.service;
 
 import java.util.List;
 import java.util.UUID;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Semaphore;
 
 import org.springframework.stereotype.Service;
 
@@ -51,6 +55,24 @@ public class RewardsService {
 				}
 			}
 		}
+	}
+
+	private static final int MAX_THREADS = Runtime.getRuntime().availableProcessors() * 4;
+	private static final Semaphore semaphore = new Semaphore(MAX_THREADS);
+	private static final ExecutorService executor = Executors.newCachedThreadPool();
+
+	public CompletableFuture<Void> calculateRewardsAsync(User user) {
+		return CompletableFuture.runAsync(() -> {
+			try {
+				semaphore.acquire();
+				calculateRewards(user);
+			} catch (InterruptedException e) {
+				Thread.currentThread().interrupt();
+				throw new RuntimeException("Thread interrompu", e);
+			} finally {
+				semaphore.release();
+			}
+		}, executor);
 	}
 
 	public int getRewardPoints(Attraction attraction, UUID userId) {
