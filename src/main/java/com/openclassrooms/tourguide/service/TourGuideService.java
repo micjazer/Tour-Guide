@@ -2,7 +2,6 @@ package com.openclassrooms.tourguide.service;
 
 import java.time.LocalDateTime;
 import java.time.ZoneOffset;
-import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.Date;
 import java.util.HashMap;
@@ -14,7 +13,7 @@ import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
-import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.Semaphore;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
@@ -96,60 +95,50 @@ public class TourGuideService {
 	public VisitedLocation trackUserLocation(User user) {
 		VisitedLocation visitedLocation = gpsUtil.getUserLocation(user.getUserId());
 		user.addToVisitedLocations(visitedLocation);
-		rewardsService.calculateRewards(user, gpsUtil.getAttractions());
+		rewardsService.calculateRewards(user);
 		return visitedLocation;
 	}
 
-	public List<VisitedLocation> trackUserLocation(List<User> users) {
-		ExecutorService executorService = Executors.newCachedThreadPool();
-		AtomicInteger processedCount = new AtomicInteger(0);
-		List<VisitedLocation> visitedLocations = new ArrayList<>();
-		long startTime = System.currentTimeMillis();
-		// CALCULATE REWARD DE BASE
-		// rewardsService.calculateRewards(users, gpsUtil.getAttractions());
-		List<CompletableFuture<Void>> futures = new ArrayList<>();
+	private static final int MAX_THREADS = Runtime.getRuntime().availableProcessors() * 4;
+	private static final Semaphore semaphore = new Semaphore(MAX_THREADS);
+	private static final ExecutorService executor = Executors.newCachedThreadPool();
 
-		for (User user : users) {
-			CompletableFuture<Void> future = CompletableFuture.runAsync(() -> {
-				VisitedLocation visitedLocation = gpsUtil.getUserLocation(user.getUserId());
-				user.addToVisitedLocations(visitedLocation);
-				synchronized (visitedLocations) {
-					visitedLocations.add(visitedLocation);
-				}
-				int count = processedCount.incrementAndGet();
-				if (count % 1000 == 0) {
-					long elapsedTime = System.currentTimeMillis() - startTime;
-					System.out.println(count + " utilisateur fait. temps pris: " + (elapsedTime /
-							1000) + " secondes.");
-				}
-			}, executorService);
-			futures.add(future);
-		}
-
-		CompletableFuture.allOf(futures.toArray(new CompletableFuture[0])).join();
-		executorService.shutdown();
-
-		return visitedLocations;
+	public CompletableFuture<VisitedLocation> trackUserLocationAsync(User user) {
+		return CompletableFuture.supplyAsync(() -> {
+			try {
+				semaphore.acquire();
+				return trackUserLocation(user);
+			} catch (InterruptedException e) {
+				Thread.currentThread().interrupt();
+				throw new RuntimeException("Thread interrompu", e);
+			} finally {
+				semaphore.release();
+			}
+		}, executor);
 	}
 
 	public List<NearbyAttractionDTO> getNearByAttractions(VisitedLocation visitedLocation) {
-		List<NearbyAttractionDTO> nearbyAttractions = new ArrayList<>();
-		List<Attraction> attractions = gpsUtil.getAttractions();
+		List<Attraction> Allattractions = gpsUtil.getAttractions();
 
-		for (Attraction attraction : attractions) {
-			double distance = rewardsService.getDistance(attraction, visitedLocation.location);
-			int rewardPoints = rewardsService.getRewardPoints(attraction, visitedLocation.userId);
+		List<Attraction> closestAttractions = Allattractions.stream()
+				.sorted(Comparator.comparingDouble(
+						attraction -> rewardsService.getDistance(attraction, visitedLocation.location)))
+				.limit(5)
+				.collect(Collectors.toList());
 
-			nearbyAttractions.add(new NearbyAttractionDTO(
-					attraction.attractionName,
-					visitedLocation.location,
-					attraction.longitude,
-					attraction.latitude,
-					distance,
-					rewardPoints));
-		}
+		return closestAttractions.stream()
+				.map(attraction -> {
+					double distance = rewardsService.getDistance(attraction, visitedLocation.location);
+					int rewardPoints = rewardsService.getRewardPoints(attraction, visitedLocation.userId);
 
-		return nearbyAttractions.stream()
+					return new NearbyAttractionDTO(
+							attraction.attractionName,
+							visitedLocation.location,
+							attraction.longitude,
+							attraction.latitude,
+							distance,
+							rewardPoints);
+				})
 				.sorted(Comparator.comparingDouble(NearbyAttractionDTO::getDistance))
 				.limit(5)
 				.collect(Collectors.toList());

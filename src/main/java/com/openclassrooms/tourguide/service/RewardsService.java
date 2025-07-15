@@ -2,10 +2,10 @@ package com.openclassrooms.tourguide.service;
 
 import java.util.List;
 import java.util.UUID;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
-import java.util.concurrent.TimeUnit;
-import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.Semaphore;
 
 import org.springframework.stereotype.Service;
 
@@ -42,12 +42,14 @@ public class RewardsService {
 		proximityBuffer = defaultProximityBuffer;
 	}
 
-	public void calculateRewards(User user, List<Attraction> attractions) {
+	public void calculateRewards(User user) {
 		List<VisitedLocation> userLocations = user.getVisitedLocations();
+		List<Attraction> attractions = gpsUtil.getAttractions();
+
 		for (VisitedLocation visitedLocation : userLocations) {
 			for (Attraction attraction : attractions) {
 				if (nearAttraction(visitedLocation, attraction)) {
-					int rewardPoints = getRewardPoints(attraction, user); // sleep
+					int rewardPoints = getRewardPoints(attraction, user);
 					UserReward reward = new UserReward(visitedLocation, attraction, rewardPoints);
 					user.addUserReward(reward);
 				}
@@ -55,37 +57,22 @@ public class RewardsService {
 		}
 	}
 
-	public void calculateRewards(List<User> users, List<Attraction> attractions) {
-		ExecutorService executorService = Executors.newFixedThreadPool(users.size() / 10); // on dit a java les threads
-																							// qu'on veux
-		AtomicInteger processedCount = new AtomicInteger(0); // on va garder un compte de combien de users on a traité
-																// en multi thread
-		// monitoring du temps
-		long startTime = System.currentTimeMillis();
+	private static final int MAX_THREADS = Runtime.getRuntime().availableProcessors() * 4;
+	private static final Semaphore semaphore = new Semaphore(MAX_THREADS);
+	private static final ExecutorService executor = Executors.newCachedThreadPool();
 
-		for (User user : users) {
-			// executorService avec nos threads pour traiter les users
-			executorService.submit(() -> {
-				calculateRewards(user, attractions);
-				int count = processedCount.incrementAndGet();
-
-				if (count % 1000 == 0) {
-					long elapsedTime = System.currentTimeMillis() - startTime;
-					System.out.println(count + " users OK. temps pris: " + (elapsedTime / 1000) +
-							" secondes.");
-				}
-			});
-		}
-		// on ferme le service
-		executorService.shutdown();
-		// on attend
-		try {
-			if (!executorService.awaitTermination(1, TimeUnit.DAYS)) {
-				executorService.shutdownNow();
+	public CompletableFuture<Void> calculateRewardsAsync(User user) {
+		return CompletableFuture.runAsync(() -> {
+			try {
+				semaphore.acquire();
+				calculateRewards(user);
+			} catch (InterruptedException e) {
+				Thread.currentThread().interrupt();
+				throw new RuntimeException("Thread interrompu", e);
+			} finally {
+				semaphore.release();
 			}
-		} catch (InterruptedException e) {
-			executorService.shutdownNow();
-		}
+		}, executor);
 	}
 
 	public int getRewardPoints(Attraction attraction, UUID userId) {
